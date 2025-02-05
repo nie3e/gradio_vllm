@@ -1,0 +1,13 @@
+name: "gradio-vllm"
+services:
+  app:
+    build:
+      context: .
+    image: gradio-vllm
+    env_file:
+      - .env
+    entrypoint:
+      - python
+      - /app/main.py
+    ports:
+      - "7861:7860"
