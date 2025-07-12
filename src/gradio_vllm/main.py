@@ -32,7 +32,7 @@ def parse_stream(
     messages_chat = []
 
     for chunk in content_stream:
-        if chunk.choices[0].delta.content is None:
+        if not chunk.choices[0].delta.content:
             continue
 
         partial_message += chunk.choices[0].delta.content

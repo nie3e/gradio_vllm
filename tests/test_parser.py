@@ -2,7 +2,7 @@ from typing import Self
 
 import pytest
 
-from main import parse_stream
+from gradio_vllm.main import parse_stream
 
 
 class FakeChunk:
