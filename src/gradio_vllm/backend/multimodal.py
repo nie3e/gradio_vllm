@@ -1,24 +1,28 @@
 from typing import Generator
 
-from gradio_vllm.main import image_to_base64, client, get_model_name
+from gradio_vllm.backend.helper import parse_stream, image_to_base64
+from gradio_vllm.main import client, get_model_name
 
 
 def inference(
-    message: dict, history: list[str], system_prompt: str,
-    temperature: float, max_completion_tokens: int
-) -> Generator[str, None, None]:
+    message: dict,
+    history: list[dict],
+    system_prompt: str,
+    temperature: float,
+    max_completion_tokens: int
+) -> Generator[list, None, None]:
     messages: list[dict] = []
     if system_prompt:
         messages = [{"role": "system", "content": system_prompt}]
     images = []
-    for couple in history:
-        if type(couple[0]) is tuple:
-            images += couple[0]
-        elif couple[0][1]:
+    for history_msg in [msg for msg in history if not msg.get("metadata")]:
+        if type(history_msg["content"]) is tuple:
+            images += history_msg["content"]
+        elif history_msg["content"] and history_msg["role"] == "user":
             messages.append({
                 "role": "user",
                 "content":
-                    [{"type": "text", "text": couple[0][1]}] +
+                    [{"type": "text", "text": history_msg["content"]}] +
                     [
                         {
                             "type": "image_url",
@@ -27,8 +31,10 @@ def inference(
                         for path in images
                     ]
             })
-            messages.append({"role": "assistant", "content": couple[1]})
             images = []
+        elif history_msg["content"] and history_msg["role"] == "assistant":
+            messages.append({"role": "assistant",
+                             "content": history_msg["content"]})
 
     messages.append({
         "role": "user",
@@ -49,9 +55,7 @@ def inference(
         messages=messages,
         max_completion_tokens=max_completion_tokens,
         temperature=temperature,
-        stream=True
+        stream=True,
     )
-    partial_message = ""
-    for chunk in stream:
-        partial_message += (chunk.choices[0].delta.content or "")
-        yield partial_message
+
+    yield from parse_stream(stream)

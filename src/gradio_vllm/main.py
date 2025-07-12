@@ -1,4 +1,3 @@
-import base64
 import os
 
 from openai import OpenAI
@@ -9,12 +8,6 @@ BASE_URL = os.getenv("BASE_URL", "http://localhost:8000/v1")
 BASE_URL = "http://series2.rav:8000/v1"
 
 client = OpenAI(base_url=BASE_URL, api_key="EMPTY")
-
-
-def image_to_base64(image_path: str) -> str:
-    with open(image_path, 'rb') as img:
-        encoded_string = base64.b64encode(img.read()).decode('utf-8')
-    return f"data:image/jpeg;base64,{encoded_string}"
 
 
 def get_model_name() -> str:

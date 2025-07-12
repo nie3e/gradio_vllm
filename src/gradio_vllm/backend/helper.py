@@ -1,3 +1,4 @@
+import base64
 from typing import Iterable, Generator
 from gradio import ChatMessage
 
@@ -75,3 +76,9 @@ def parse_stream(
                 messages_chat[-1].content = partial_message
 
         yield messages_chat
+
+
+def image_to_base64(image_path: str) -> str:
+    with open(image_path, 'rb') as img:
+        encoded_string = base64.b64encode(img.read()).decode('utf-8')
+    return f"data:image/jpeg;base64,{encoded_string}"
