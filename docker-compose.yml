@@ -4,6 +4,7 @@ services:
     build:
       context: .
     image: gradio-vllm
+    restart: always
     env_file:
       - .env
     entrypoint:

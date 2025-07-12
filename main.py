@@ -1,12 +1,13 @@
 import base64
 import os
-from itertools import cycle
-from typing import Generator
+from typing import Generator, Iterable
 
+from gradio.components.chatbot import ChatMessage
 from openai import OpenAI
 import gradio as gr
 
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000/v1")
+BASE_URL = "http://series2.rav:8000/v1"
 
 client = OpenAI(base_url=BASE_URL, api_key="EMPTY")
 
@@ -22,35 +23,108 @@ def get_model_name() -> str:
     return model_name
 
 
-def inference(
-        message: str, history: list[str], system_prompt: str,
-        repetition_penalty: float,
-        temperature: float, max_completion_tokens: int
-) -> Generator[str, None, None]:
-    flat_history = [
-        h for hs in history for h in hs
-    ]
-    messages = flat_history + [message]
-    messages_dict: list[dict] = [
-        {"role": u, "content": msg}
-        for u, msg in zip(cycle(["user", "assistant"]), messages)
-    ]
+def parse_stream(
+    content_stream: Iterable,
+) -> Generator[list[ChatMessage], None, None]:
+    partial_message = ""
+    think_mode = False
+    answer_started = False
+    messages_chat = []
 
+    for chunk in content_stream:
+        if chunk.choices[0].delta.content is None:
+            continue
+
+        partial_message += chunk.choices[0].delta.content
+
+        if not think_mode and not answer_started:
+            if partial_message.startswith("<think>"):
+                think_mode = True
+                partial_message = partial_message[7:]
+                messages_chat.append(
+                    ChatMessage(
+                        role="assistant",
+                        content=partial_message,
+                        metadata={"title": "⏳Thinking"},
+                    )
+                )
+            elif (len(partial_message) >= 7
+                  or not partial_message.startswith("<")):
+                answer_started = True
+                messages_chat.append(
+                    ChatMessage(
+                        role="assistant",
+                        content=partial_message,
+                    )
+                )
+
+        if think_mode and not answer_started and "</think>" in partial_message:
+            think_mode = False
+            answer_started = True
+            think_content, _, answer_content = partial_message.partition(
+                "</think>")
+
+            if messages_chat:
+                messages_chat[-1].content = think_content
+
+            if answer_content:
+                if answer_content.startswith("<answer>"):
+                    answer_content = answer_content[8:]
+                if answer_content.endswith("</answer>"):
+                    answer_content = answer_content[:-9]
+
+            messages_chat.append(
+                ChatMessage(
+                    role="assistant",
+                    content=answer_content,
+                )
+            )
+            partial_message = answer_content
+
+        if messages_chat and answer_started:
+            current_content = partial_message
+            _, _, answer_content = current_content.partition("<answer>")
+
+            if "</answer>" in answer_content:
+                answer_content = answer_content.replace("</answer>", "")
+            messages_chat[-1].content = answer_content or current_content
+        elif messages_chat:
+            if not (
+                think_mode and not answer_started
+                and "</think>" in partial_message
+            ):
+                messages_chat[-1].content = partial_message
+
+        yield messages_chat
+
+
+def inference(
+    message: str,
+    history: list[dict],
+    system_prompt: str,
+    temperature: float,
+    max_completion_tokens: int,
+) -> Generator[list, None, None]:
+    messages = []
     if system_prompt:
-        messages_dict = ([{"role": "system", "content": system_prompt}] +
-                         messages_dict)
+        messages.append({"role": "system", "content": system_prompt})
+    messages += [
+        {"role": msg["role"], "content": msg["content"]}
+        for msg in history
+        if not msg.get("metadata")
+    ]
+    messages.append({"role": "user", "content": message})
 
     stream = client.chat.completions.create(
         model=get_model_name(),
-        messages=messages_dict,
+        messages=messages,
         max_completion_tokens=max_completion_tokens,
         temperature=temperature,
-        stream=True
+        stream=True,
     )
-    partial_message = ""
-    for chunk in stream:
-        partial_message += (chunk.choices[0].delta.content or "")
-        yield partial_message
+
+    yield from parse_stream(stream)
+    return
 
 
 def multimodal_inference(
@@ -95,7 +169,7 @@ def multimodal_inference(
                 for file in message["files"]
             ]
     })
-    stream = client.chat.completions.create(
+    stream = client.chat.completions.create(  # noqa
         model=get_model_name(),
         messages=messages,
         max_completion_tokens=max_completion_tokens,
@@ -124,35 +198,41 @@ def main() -> int:
                     )
                     temperature = gr.Slider(
                         label="Temperature",
-                        minimum=0.1, maximum=3.0, step=0.1, value=0.3
+                        minimum=0.0, maximum=2.0, step=0.1, value=0.3
                     )
             with gr.Column(scale=7):
                 with gr.Tab("Chat"):
+                    with gr.Accordion("System prompt", open=False):
+                        system_textbox = gr.Textbox("", label="System prompt")
                     gr.ChatInterface(
                         inference,
+                        type="messages",
+                        editable=True,
                         description=get_model_name(),
                         show_progress="full",
                         multimodal=False,
                         additional_inputs=[
-                            gr.Textbox("", label="System prompt"),
-                            repetition_penalty, temperature,
+                            system_textbox,
+                            temperature,
                             max_completion_tokens
                         ],
-                        concurrency_limit=5
+                        concurrency_limit=5,
                     ).chatbot.height = 700
                 with gr.Tab("Multimodal"):
+                    with gr.Accordion("System prompt", open=False):
+                        system_textbox = gr.Textbox("", label="System prompt")
                     gr.ChatInterface(
                         multimodal_inference,
                         show_progress="full",
                         multimodal=True,
                         additional_inputs=[
-                            gr.Textbox("", label="System prompt"),
+                            system_textbox,
                             repetition_penalty, temperature,
                             max_completion_tokens
                         ],
                         concurrency_limit=5
                     ).chatbot.height = 700
-    demo.queue(max_size=10).launch(server_name="0.0.0.0")
+    demo.queue(max_size=10).launch()
 
     return 0
 
