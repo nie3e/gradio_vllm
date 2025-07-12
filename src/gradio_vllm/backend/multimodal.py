@@ -1,7 +1,7 @@
 from typing import Generator
 
 from gradio_vllm.backend.helper import parse_stream, image_to_base64
-from gradio_vllm.main import client, get_model_name
+from gradio_vllm.backend.vllm_client import client, get_model_name
 
 
 def inference(

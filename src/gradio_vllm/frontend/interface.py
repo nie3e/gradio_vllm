@@ -1,6 +1,6 @@
 import gradio as gr
 
-from gradio_vllm.main import get_model_name
+from gradio_vllm.backend.vllm_client import get_model_name
 from gradio_vllm.backend import chat, multimodal
 
 
