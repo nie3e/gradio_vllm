@@ -1,7 +1,7 @@
 from typing import Generator
 
 from gradio_vllm.backend.helper import parse_stream
-from gradio_vllm.backend.vllm_client import client, get_model_name
+from gradio_vllm.backend.vllm_client import client
 
 
 def inference(
@@ -21,12 +21,13 @@ def inference(
     ]
     messages.append({"role": "user", "content": message})
 
-    stream = client.chat.completions.create(
-        model=get_model_name(),
-        messages=messages,
-        max_completion_tokens=max_completion_tokens,
-        temperature=temperature,
-        stream=True,
-    )
+    with client as c:
+        stream = c.chat.completions.create(
+            model=client.model_name,
+            messages=messages,
+            max_completion_tokens=max_completion_tokens,
+            temperature=temperature,
+            stream=True,
+        )
 
     yield from parse_stream(stream)
