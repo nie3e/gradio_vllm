@@ -1,6 +1,7 @@
 from typing import Generator
 
-from gradio_vllm.backend.helper import parse_stream, image_to_base64
+from gradio_vllm.backend.helper import (parse_stream,
+                                        prepare_multimodal_messages)
 from gradio_vllm.backend.vllm_client import client
 
 
@@ -11,45 +12,8 @@ def inference(
     temperature: float,
     max_completion_tokens: int
 ) -> Generator[list, None, None]:
-    messages: list[dict] = []
-    if system_prompt:
-        messages = [{"role": "system", "content": system_prompt}]
-    images = []
-    for history_msg in [msg for msg in history if not msg.get("metadata")]:
-        if type(history_msg["content"]) is tuple:
-            images += history_msg["content"]
-        elif history_msg["content"] and history_msg["role"] == "user":
-            messages.append({
-                "role": "user",
-                "content":
-                    [{"type": "text", "text": history_msg["content"]}] +
-                    [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": image_to_base64(path)}
-                        }
-                        for path in images
-                    ]
-            })
-            images = []
-        elif history_msg["content"] and history_msg["role"] == "assistant":
-            messages.append({"role": "assistant",
-                             "content": history_msg["content"]})
+    messages = prepare_multimodal_messages(message, history, system_prompt)
 
-    messages.append({
-        "role": "user",
-        "content":
-            [
-                {"type": "text", "text": message["text"]}
-            ] +
-            [
-                {
-                    "type": "image_url",
-                    "image_url": {"url": image_to_base64(file)}
-                }
-                for file in message["files"]
-            ]
-    })
     with client as c:
         stream = c.chat.completions.create(  # noqa
             model=client.model_name,

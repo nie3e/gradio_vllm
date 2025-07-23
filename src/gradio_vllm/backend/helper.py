@@ -1,5 +1,5 @@
 import base64
-from typing import Iterable, Generator
+from typing import Iterable, Generator, Any
 from gradio import ChatMessage
 
 
@@ -82,3 +82,71 @@ def image_to_base64(image_path: str) -> str:
     with open(image_path, 'rb') as img:
         encoded_string = base64.b64encode(img.read()).decode('utf-8')
     return f"data:image/jpeg;base64,{encoded_string}"
+
+
+def prepare_chat_messages(
+    message: str,
+    history: list[dict],
+    system_prompt: str
+) -> list[dict[str, str]]:
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages += [
+        {"role": msg["role"], "content": msg["content"]}
+        for msg in history
+        if not msg.get("metadata")
+    ]
+    messages.append({"role": "user", "content": message})
+
+    return messages
+
+
+def prepare_multimodal_messages(
+    message: dict[str, Any],
+    history: list[dict[str, Any]],
+    system_prompt: str
+) -> list[dict[str, Any]]:
+    messages: list[dict] = []
+    if system_prompt:
+        messages = [{"role": "system", "content": system_prompt}]
+    images = []
+    for history_msg in [msg for msg in history if not msg.get("metadata")]:
+        if type(history_msg["content"]) is tuple:
+            images += history_msg["content"]
+        elif history_msg["content"] and history_msg["role"] == "user":
+            messages.append({
+                "role": "user",
+                "content":
+                    [{"type": "text", "text": history_msg["content"]}] +
+                    [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": image_to_base64(path)},
+                        }
+                        for path in images
+                    ],
+            })
+            images = []
+        elif history_msg["content"] and history_msg["role"] == "assistant":
+            messages.append({"role": "assistant",
+                             "content": history_msg["content"]})
+
+    messages.append(
+        {
+            "role": "user",
+            "content":
+                [
+                    {"type": "text", "text": message["text"]}
+                ] +
+                [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": image_to_base64(file)}
+                    }
+                    for file in message["files"]
+                ],
+        }
+    )
+
+    return messages

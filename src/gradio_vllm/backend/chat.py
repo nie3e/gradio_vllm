@@ -1,25 +1,23 @@
-from typing import Generator
+from typing import Generator, Any
 
-from gradio_vllm.backend.helper import parse_stream
+from gradio_vllm.backend.helper import (
+    parse_stream, prepare_chat_messages, prepare_multimodal_messages
+)
 from gradio_vllm.backend.vllm_client import client
 
 
 def inference(
-    message: str,
+    message: str | dict[str, Any],
     history: list[dict],
     system_prompt: str,
     temperature: float,
     max_completion_tokens: int,
+    is_multimodal: bool = False
 ) -> Generator[list, None, None]:
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages += [
-        {"role": msg["role"], "content": msg["content"]}
-        for msg in history
-        if not msg.get("metadata")
-    ]
-    messages.append({"role": "user", "content": message})
+    if is_multimodal:
+        messages = prepare_multimodal_messages(message, history, system_prompt)
+    else:
+        messages = prepare_chat_messages(message, history, system_prompt)
 
     with client as c:
         stream = c.chat.completions.create(

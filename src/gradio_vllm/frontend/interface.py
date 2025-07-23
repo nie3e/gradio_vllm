@@ -2,7 +2,7 @@ import gradio as gr
 import os
 
 from gradio_vllm.backend.vllm_client import client
-from gradio_vllm.backend import chat, multimodal
+from gradio_vllm.backend import chat
 
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000/v1")
 
@@ -33,7 +33,7 @@ def create_app() -> gr.Blocks:
                 with gr.Group():
                     max_completion_tokens = gr.Slider(
                         label="Max completion tokens",
-                        minimum=1, maximum=20000, step=1, value=2000
+                        minimum=0, maximum=20000, step=1, value=2000
                     )
                     repetition_penalty = gr.Slider(
                         label="Repetition penalty",
@@ -64,7 +64,7 @@ def create_app() -> gr.Blocks:
                     with gr.Accordion("System prompt", open=False):
                         system_textbox = gr.Textbox("", label="System prompt")
                     gr.ChatInterface(
-                        multimodal.inference,
+                        chat.inference,
                         type="messages",
                         editable=True,
                         show_progress="full",
@@ -73,6 +73,8 @@ def create_app() -> gr.Blocks:
                             system_textbox,
                             temperature,
                             max_completion_tokens,
+                            gr.Checkbox(value=True, visible=False,
+                                        interactive=False)
                         ],
                         concurrency_limit=5,
                     ).chatbot.height = 700
