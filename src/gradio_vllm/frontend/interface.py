@@ -8,7 +8,7 @@ BASE_URL = os.getenv("BASE_URL", "http://localhost:8000/v1")
 
 
 def create_app() -> gr.Blocks:
-    with gr.Blocks() as demo:
+    with gr.Blocks(analytics_enabled=False) as demo:
         with gr.Row():
             with gr.Column(scale=1):
                 with gr.Group():
